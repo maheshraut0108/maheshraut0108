@@ -1,0 +1,112 @@
+#!/bin/bash
+	function menu {
+					clear
+					echo
+					echo -e "\t\t\tSelect Your Operating System\n"
+					echo -e "\t1. SUSE Linux"
+					echo -e "\t2. Ubuntu"
+					echo -e "\t3. RHEL"
+					echo -e "\t0. Exit Menu\n\n"
+					echo -en "\t\tEnter an Option:"
+					read -n 1 option
+					
+	case $option in
+        0) exit ;;
+		1) submenu ;;													   
+		2) submenu ;;
+		3) submenu ;;
+		*) clear
+			echo -e "Sorry, wrong selection";;
+	esac
+	echo -en "\n\n\t\t\tHit any key to continue"
+	read -n 1 line
+				}	
+				
+	function submenu {
+	while [ 1 ]
+	do
+	clear
+							echo
+							echo -e "\t\t\tSelect Action \n"
+									echo -e "\ta. Last reboot time"
+									echo -e "\tb. Free RAM"
+									echo -e "\tc. Hardware information"
+									echo -e "\td. Information about block devices"
+									echo -e "\te. Information about BIOS"
+									echo -e "\tf. Information about Processor"
+									echo -e "\tg. Check available space"
+									echo -e "\th. Check who is logged on the system"
+									echo -e "\ti. Check the server date, time and timezone"
+									echo -e "\tj. Check IP and Network information"
+									echo -e "\tk. Check network ports in use and their incoming connections"
+									echo -e "\tl. Check Command history"	
+									echo -e "\tm. CPU information"
+									
+									echo -e "\tn. Check currently running process"
+									echo -e "\to. Chceck virtual memory usage"
+									echo -e "\tp. Check scheduled cron jobs"
+									echo -e "\tq. Check DNS lookup"
+									echo -e "\tr. Check number of processing units present to the current process"
+									echo -e "\ts. Check all the current environment variables"
+									echo -e "\tt. Check connectivity between hosts on a network"
+									
+									echo -e "\tu. Change Operating System"
+									echo -e "\t0. Exit Menu\n\n"
+									echo -en "\t\tEnter an Option: "
+									read -n 1 option2
+									echo					
+			case $option2 in
+			  a)clear
+			  uptime;;		
+			  b)clear
+			  free -g;;
+			  c)clear 
+			  lshw -short ;;
+			  d)clear
+			  lsblk -a ;;
+			  e)clear
+			  dmidecode -t bios ;;
+			  f)clear
+			  dmidecode -t processor ;;
+			  g)clear 
+			  df -hT ;;
+			  h)clear 
+			  who ;;
+			  i)clear 
+			  timedatectl ;;
+			  j)clear 
+			  ifconfig ;;
+			  k)clear 
+			  netstat -tulpn/ lsof -i ;;
+			  l)clear 
+			  history ;;
+			  m)clear 
+			  lscpu ;;
+			  n)clear
+			  pstree ;;
+			  o)clear
+			  vmstat ;;
+			  p)clear
+			  crontab -l ;;
+			  q)clear
+			  dig ;;
+			  r)clear
+			  nproc ;;
+			  s)clear
+			  env ;;
+			  t)clear
+			  ping google.com ;;
+			  u) menu ;;
+			  0) exit ;;
+			  *) clear
+			  echo "Sorry, wrong selection";;
+			esac
+			echo -en "\n\n\t\t\tHit any key to continue"
+read -n 1 line
+done
+	}									
+while [ 1 ]
+do
+	menu
+done
+clear
