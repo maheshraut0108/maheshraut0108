@@ -655,10 +655,14 @@ def copy_row(service, sheet_id, source_row):
     sheet.batchUpdate(spreadsheetId=SPREADSHEET_ID, body=copy_request).execute()
     print(f"Row {source_row} copied to row {destination_row} successfully.")
 
+
 def update_values(service, row_number, column_values, sheet_name):
     """Update specific column values in the newly copied row."""
     sheet = service.spreadsheets()
     update_data = []
+
+    # Convert numpy int64 to Python int
+    column_values = {k: int(v) if isinstance(v, np.int64) else v for k, v in column_values.items()}
 
     for col, value in column_values.items():
         print(value)
@@ -677,9 +681,6 @@ def update_values(service, row_number, column_values, sheet_name):
             body={"valueInputOption": "USER_ENTERED", "data": update_data}
         ).execute()
         print(f"Updated values in row {row_number}.")
-
-
-
 
 
 def get_sheet_id(service, spreadsheet_id, sheet_name):
@@ -849,6 +850,7 @@ def main():
     
     formatted_date = first_day_of_previous_month.strftime('%m/%Y')
     last_month_date = last_day_of_previous_month.strftime('%m/%d/%Y')
+    todays_date = today.strftime('%m/%d/%Y')
 
     # Define column updates (Example: Change column B and C in the new row)
     new_values = {
@@ -889,6 +891,8 @@ def main():
     last_row = get_last_row(service, SHEET_FEDRAMP)
     copy_row(service, sheet_id, last_row)
     new_values = {
+        "A": last_month_date,
+        "CV": todays_date,
         "CW": total_licensed_users_gov,
         "CX": total_active_users_gov,
         "CY": total_used_storage_in_gb_gov,
