@@ -782,6 +782,164 @@ def copy_last_column_and_update_values(service, column_values):
 
 
 
+def phoenix(service, last_month_date):
+    """Copy the last columnlast_month_date from rows 64 to 110 in Main Sheet and update values from AWS Cost Explorer."""
+    sheet = service.spreadsheets()
+    
+    # Determine the last column with data in the specified range
+    result = sheet.values().get(spreadsheetId=SPREADSHEET_ID, range=f"{SHEET_GOV}!64:111").execute()
+    values = result.get("values", [])
+    if not values:
+        print("No data found in the specified range.")
+        return
+
+    last_column_index = len(values[0]) - 1 if values[0] else 0
+    print(f"Last column index with data: {last_column_index}")
+    
+    # Ensure the spreadsheet has enough columns
+    required_columns = last_column_index + 2  # Current last column + new column
+    grid_properties = sheet.get(spreadsheetId=SPREADSHEET_ID).execute().get('sheets')[0].get('properties').get('gridProperties')
+    current_column_count = grid_properties.get('columnCount')
+    print(f"Current column count: {current_column_count}")
+
+    if current_column_count < required_columns:
+        add_columns_request = {
+            "requests": [
+                {
+                    "appendDimension": {
+                        "sheetId": get_sheet_id(service, SPREADSHEET_ID, SHEET_GOV),
+                        "dimension": "COLUMNS",
+                        "length": required_columns - current_column_count
+                    }
+                }
+            ]
+        }
+        sheet.batchUpdate(spreadsheetId=SPREADSHEET_ID, body=add_columns_request).execute()
+        print(f"Added {required_columns - current_column_count} columns to the sheet.")
+
+    # Define the range for the source and destination columns
+    source_column_letter = column_index_to_letter(last_column_index)
+    destination_column_letter = column_index_to_letter(last_column_index + 1)
+    source_range = f"{SHEET_GOV}!{source_column_letter}64:{source_column_letter}110"
+    destination_range = f"{SHEET_GOV}!{destination_column_letter}64:{destination_column_letter}110"
+    print(f"Source range: {source_range}")
+    print(f"Destination range: {destination_range}")
+
+    # Get the sheet ID
+    sheet_id = get_sheet_id(service, SPREADSHEET_ID, SHEET_GOV)
+
+    # Copy the last column to the new column
+    copy_request = {
+        "requests": [
+            {
+                "copyPaste": {
+                    "source": {
+                        "sheetId": sheet_id,
+                        "startRowIndex": 63,  # Row 64 (0-based index)
+                        "endRowIndex": 110,   # Row 111 (0-based index)
+                        "startColumnIndex": last_column_index,
+                        "endColumnIndex": last_column_index + 1
+                    },
+                    "destination": {
+                        "sheetId": sheet_id,
+                        "startRowIndex": 63,  # Row 64 (0-based index)
+                        "endRowIndex": 110,   # Row 111 (0-based index)
+                        "startColumnIndex": last_column_index + 1,
+                        "endColumnIndex": last_column_index + 2
+                    },
+                    "pasteType": "PASTE_NORMAL",
+                    "pasteOrientation": "NORMAL"
+                }
+            }
+        ]
+    }
+
+    sheet.batchUpdate(spreadsheetId=SPREADSHEET_ID, body=copy_request).execute()
+    print(f"Copied column {source_column_letter} to {destination_column_letter} successfully.")
+
+    # Fetch values from AWS Cost Explorer
+    total_cost1, dynamodb_cost1, ec2_cost1, rds_cost1, s3_cost1 = fetch_aws_costs("697280920917")
+    total_cost2, dynamodb_cost2, ec2_cost2, rds_cost2, s3_cost2 = fetch_aws_costs("361870911536")
+
+    # Update the values in the new column
+    update_data = [
+        {"range": f"{SHEET_GOV}!{destination_column_letter}64", "values": [[last_month_date]]},
+        {"range": f"{SHEET_GOV}!{destination_column_letter}66", "values": [[dynamodb_cost1]]},
+        {"range": f"{SHEET_GOV}!{destination_column_letter}67", "values": [[ec2_cost1]]},
+        {"range": f"{SHEET_GOV}!{destination_column_letter}68", "values": [[rds_cost1]]},
+        {"range": f"{SHEET_GOV}!{destination_column_letter}69", "values": [[s3_cost1]]},
+        {"range": f"{SHEET_GOV}!{destination_column_letter}74", "values": [[total_cost1]]},
+
+        {"range": f"{SHEET_GOV}!{destination_column_letter}81", "values": [[last_month_date]]},
+        {"range": f"{SHEET_GOV}!{destination_column_letter}83", "values": [[dynamodb_cost2]]},
+        {"range": f"{SHEET_GOV}!{destination_column_letter}84", "values": [[ec2_cost2]]},
+        {"range": f"{SHEET_GOV}!{destination_column_letter}85", "values": [[rds_cost2]]},
+        {"range": f"{SHEET_GOV}!{destination_column_letter}86", "values": [[s3_cost2]]},
+        {"range": f"{SHEET_GOV}!{destination_column_letter}91", "values": [[total_cost2]]}
+    ]
+
+    if update_data:
+        sheet.values().batchUpdate(
+            spreadsheetId=SPREADSHEET_ID,
+            body={"valueInputOption": "USER_ENTERED", "data": update_data}
+        ).execute()
+        print(f"Updated values in column {destination_column_letter} for specified rows.")
+
+def fetch_aws_costs(linked_account):
+    # Initialize a session using Amazon Cost Explorer with a specific profile
+    session = boto3.Session(profile_name='payer')
+    client = session.client('ce')
+
+    # Calculate the date range
+    start_date = "2025-02-01"
+    end_date = "2025-03-01"
+
+    # Create a cost explorer query with filters
+    response = client.get_cost_and_usage(
+        TimePeriod={'Start': start_date, 'End': end_date},
+        Granularity='MONTHLY',
+        Metrics=['NetAmortizedCost'],
+        GroupBy=[{'Type': 'DIMENSION', 'Key': 'SERVICE'}],
+        Filter={
+            'And': [
+                {'Dimensions': {'Key': 'LINKED_ACCOUNT', 'Values': [linked_account]}},
+                {'Not': {'Dimensions': {'Key': 'RECORD_TYPE', 'Values': ['Credit', 'Refund', 'Enterprise Discount Program Discount']}}}
+            ]
+        }
+    )
+
+    # Initialize cost variables
+    total_cost = 0.0
+    dynamodb_cost = 0.0
+    ec2_cost = 0.0
+    rds_cost = 0.0
+    s3_cost = 0.0
+
+    # Parse the response to get costs
+    results = response.get('ResultsByTime', [])
+    if not results:
+        return total_cost, dynamodb_cost, ec2_cost, rds_cost, s3_cost
+
+    for result in results:
+        groups = result.get('Groups', [])
+        for group in groups:
+            service = group.get('Keys', [])[0]
+            amount = float(group.get('Metrics', {}).get('NetAmortizedCost', {}).get('Amount', '0'))
+            total_cost += amount
+            if service == 'Amazon DynamoDB':
+                dynamodb_cost += amount
+            elif service == 'Amazon Elastic Compute Cloud - Compute':
+                ec2_cost += amount
+            elif service == 'Amazon Relational Database Service':
+                rds_cost += amount
+            elif service == 'Amazon Simple Storage Service':
+                s3_cost += amount
+
+    return total_cost, dynamodb_cost, ec2_cost, rds_cost, s3_cost
+
+
+
+
 def main():
     service = authenticate_gmail()
     now = datetime.now()
@@ -907,6 +1065,8 @@ def main():
 
 
     update_values(service, last_row + 1, new_values, SHEET_FEDRAMP)
+
+    phoenix(service, last_month_date)
 
 
 if __name__ == '__main__':
